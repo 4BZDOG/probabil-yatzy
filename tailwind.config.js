@@ -5,6 +5,8 @@
 module.exports = {
   content: ['./index.html'],
   safelist: [],
+  // Don't apply hover: styles on touch screens (they stick after a tap).
+  future: { hoverOnlyWhenSupported: true },
   theme: {
     extend: {
       spacing: { 13: '3.25rem' },
