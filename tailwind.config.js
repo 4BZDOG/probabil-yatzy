@@ -6,7 +6,9 @@ module.exports = {
   content: ['./index.html'],
   safelist: [],
   theme: {
-    extend: {},
+    extend: {
+      spacing: { 13: '3.25rem' },
+    },
   },
   plugins: [],
 };

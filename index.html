@@ -67,19 +67,94 @@
         transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
       }
 
-      .die-shell:hover {
-        transform: translateY(-2px);
-        box-shadow: 
-          inset 0 1px 1px rgba(255, 255, 255, 0.28),
-          0 10px 20px rgba(0, 0, 0, 0.6);
+      @media (hover: hover) {
+        .die-shell:not(:disabled):hover {
+          transform: translateY(-3px);
+          box-shadow:
+            inset 0 1px 1px rgba(255, 255, 255, 0.28),
+            0 10px 20px rgba(0, 0, 0, 0.6);
+        }
       }
+
+      .die-shell:not(:disabled):active { transform: scale(0.92); }
 
       .die-shell.is-held {
         border-color: var(--accent-color);
-        box-shadow: 
+        box-shadow:
           0 0 16px var(--accent-glow),
           inset 0 0 12px var(--accent-glow);
-        transform: scale(0.96);
+        transform: translateY(4px) scale(0.95);
+      }
+
+      .hold-badge { animation: badge-pop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+      @keyframes badge-pop {
+        0% { transform: scale(0); opacity: 0; }
+        100% { transform: scale(1); opacity: 1; }
+      }
+
+      @keyframes die-land {
+        0% { transform: translateY(-6px) scale(1.08); }
+        55% { transform: translateY(1px) scale(0.95); }
+        100% { transform: translateY(0) scale(1); }
+      }
+
+      .animate-land { animation: die-land 0.36s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+      @keyframes toast-rise {
+        0% { opacity: 0; transform: translate(-50%, 10px) scale(0.9); }
+        15% { opacity: 1; transform: translate(-50%, 0) scale(1.04); }
+        25% { transform: translate(-50%, 0) scale(1); }
+        80% { opacity: 1; transform: translate(-50%, -6px); }
+        100% { opacity: 0; transform: translate(-50%, -18px); }
+      }
+
+      .score-toast {
+        position: absolute;
+        left: 50%;
+        top: 38%;
+        z-index: 20;
+        pointer-events: none;
+        white-space: nowrap;
+        animation: toast-rise 1.6s ease-out forwards;
+      }
+
+      @keyframes jackpot {
+        0%, 100% { box-shadow: 0 0 0 rgba(255, 183, 3, 0); }
+        30% { box-shadow: 0 0 60px rgba(255, 183, 3, 0.55); }
+      }
+
+      .animate-jackpot { animation: jackpot 1.2s ease-out 2; }
+
+      @keyframes prompt-glow {
+        0%, 100% { box-shadow: 0 0 0 rgba(0, 243, 255, 0); }
+        50% { box-shadow: 0 0 14px rgba(0, 243, 255, 0.45); }
+      }
+
+      .animate-prompt { animation: prompt-glow 1.4s ease-in-out infinite; }
+
+      /* Modal entrance: every full-screen overlay fades in and its panel pops in */
+      @keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes panel-in {
+        from { opacity: 0; transform: translateY(12px) scale(0.96); }
+        to { opacity: 1; transform: none; }
+      }
+      .fixed.inset-0.z-50 { animation: overlay-in 0.18s ease-out; }
+      .fixed.inset-0.z-50 > div { animation: panel-in 0.26s cubic-bezier(0.2, 0.8, 0.2, 1); }
+
+      button:focus-visible, input:focus-visible {
+        outline: 2px solid #00f3ff;
+        outline-offset: 2px;
+      }
+
+      kbd {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        padding: 0 4px;
+        border-radius: 3px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: rgba(255, 255, 255, 0.05);
+        color: #cbd5e1;
       }
 
       .pip-dot {
@@ -91,14 +166,24 @@
       }
 
       @keyframes roll-tumble {
-        0% { transform: scale(1) rotate(0deg); filter: blur(0); }
-        35% { transform: scale(0.85) rotate(140deg); filter: blur(2px); }
-        70% { transform: scale(1.1) rotate(290deg); filter: blur(1px); }
-        100% { transform: scale(1) rotate(360deg); filter: blur(0); }
+        0% { transform: translateY(0) rotate(0deg) scale(1); }
+        20% { transform: translateY(-14px) rotate(-70deg) scale(0.92); }
+        45% { transform: translateY(-4px) rotate(-200deg) scale(0.9); filter: blur(0.6px); }
+        70% { transform: translateY(-10px) rotate(-310deg) scale(0.95); }
+        100% { transform: translateY(0) rotate(-360deg) scale(1); }
       }
 
       .animate-roll {
-        animation: roll-tumble 0.55s cubic-bezier(0.25, 1, 0.5, 1);
+        animation: roll-tumble 0.42s cubic-bezier(0.3, 0.7, 0.4, 1) both;
+        animation-delay: var(--roll-delay, 0ms);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
       }
 
       ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -757,32 +842,71 @@
         );
       });
 
+      const REDUCED_MOTION = (() => {
+        try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; }
+      })();
+
+      const buzz = (pattern) => {
+        try {
+          // Only vibrate during a real tap/keypress; otherwise browsers log a blocked-call error.
+          const active = !navigator.userActivation || navigator.userActivation.isActive;
+          if (navigator.vibrate && active) navigator.vibrate(pattern);
+        } catch (e) { /* not supported */ }
+      };
+
       const Die = memo(({ value, held, isRolling, onClick, disabled, activeTheme, index }) => {
+        const rolling = isRolling && !held;
+        const [face, setFace] = useState(value);
+        const [landing, setLanding] = useState(false);
+        const wasRolling = useRef(false);
+
+        // While rolling, flicker through random faces so the die looks like it's tumbling.
+        useEffect(() => {
+          if (!rolling || REDUCED_MOTION) return;
+          const t = setInterval(() => setFace(1 + Math.floor(Math.random() * 6)), 70);
+          return () => clearInterval(t);
+        }, [rolling]);
+
+        // When a roll finishes, play a short landing bounce.
+        useEffect(() => {
+          const finished = wasRolling.current && !rolling;
+          wasRolling.current = rolling;
+          if (!finished) return;
+          setLanding(true);
+          const t = setTimeout(() => setLanding(false), 380);
+          return () => clearTimeout(t);
+        }, [rolling]);
+
+        const shown = rolling && !REDUCED_MOTION ? face : value;
+
         return (
           <div className="flex flex-col items-center gap-1 select-none">
             <button
               type="button"
               onClick={onClick}
               disabled={disabled}
+              aria-pressed={held}
+              aria-label={`Die ${index + 1}: ${value}${held ? ', held' : ''}`}
               className={`die-shell relative w-13 h-13 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl flex items-center justify-center border-2 border-white/10 ${
                 held ? 'is-held border-cyan-400' : 'hover:border-white/30'
-              } ${isRolling && !held ? 'animate-roll' : ''} ${disabled ? 'cursor-not-allowed opacity-90' : 'cursor-pointer active:scale-95'}`}
+              } ${rolling ? 'animate-roll' : ''} ${landing ? 'animate-land' : ''} ${disabled ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'}`}
               style={{
                 '--accent-color': activeTheme.color,
-                '--accent-glow': activeTheme.glow
+                '--accent-glow': activeTheme.glow,
+                '--roll-delay': `${index * 20}ms`
               }}
-              title={held ? "Click to unlock die" : "Click to hold die"}
+              title={held ? `Click or press ${index + 1} to release die` : `Click or press ${index + 1} to hold die`}
             >
               {held && (
-                <div 
-                  className="absolute -top-1.5 -right-1.5 px-1 py-px rounded text-[9px] font-mono font-bold uppercase tracking-wider flex items-center gap-0.5 shadow-lg border border-black/50"
+                <div
+                  className="hold-badge absolute -top-1.5 -right-1.5 px-1 py-px rounded text-[9px] font-mono font-bold uppercase tracking-wider flex items-center gap-0.5 shadow-lg border border-black/50"
                   style={{ backgroundColor: activeTheme.color, color: '#000' }}
                 >
                   <Icon.Lock className="w-2 h-2" />
                   HOLD
                 </div>
               )}
-              <PipGrid value={value} pipColor={held ? activeTheme.color : '#e2e8f0'} />
+              <PipGrid value={shown} pipColor={held ? activeTheme.color : '#e2e8f0'} />
             </button>
             <span className="text-[10px] font-mono text-slate-400 tracking-wider">
               #{index + 1}
@@ -1126,7 +1250,7 @@
                     canScore 
                       ? isScratch
                         ? 'bg-rose-500/10 text-rose-400 border-rose-500/30 hover:bg-rose-500/20 active:scale-95'
-                        : 'bg-cyan-500/15 text-cyan-300 border-cyan-400/50 hover:bg-cyan-500/30 shadow-[0_0_12px_rgba(0,243,255,0.15)] active:scale-95'
+                        : `bg-cyan-500/15 text-cyan-300 border-cyan-400/50 hover:bg-cyan-500/30 hover:scale-105 shadow-[0_0_12px_rgba(0,243,255,0.15)] active:scale-95 ${rollsLeft === 0 ? 'animate-prompt' : ''}`
                       : 'bg-slate-800/40 text-slate-400 border-white/5 cursor-not-allowed'
                   }`}
                   title={canScore ? (isScratch ? "Score ZERO in this box" : `Record +${potentialScore} points`) : "Roll dice to score"}
@@ -1160,6 +1284,7 @@
         const [inspectCat, setInspectCat] = useState(null);
         const [showLab, setShowLab] = useState(false);
         const [showScores, setShowScores] = useState(false);
+        const [toast, setToast] = useState(null);
         const [decisionStats, setDecisionStats] = useState({ totalChoices: 0, optimalChoices: 0 });
 
         const workerRef = useRef(null);
@@ -1293,6 +1418,7 @@
           if (rollsLeft <= 0 || isRolling) return;
           setIsRolling(true);
           SoundFX.roll();
+          buzz(12);
           const currentHeld = overrideHeld || held;
           const nextDice = dice.map((val, i) => currentHeld[i] ? val : Math.floor(Math.random() * 6) + 1);
           
@@ -1313,6 +1439,17 @@
         const handleScore = (category) => {
           const score = calculateScoreClient(category, dice);
           SoundFX.score();
+
+          const jackpot = category === CATEGORY.YAHTZEE && score > 0;
+          const nextName = gameMode === 1 ? null
+            : currentPlayer === 0 ? (gameMode === 3 ? 'CPU' : 'Player 2') : 'Player 1';
+          setToast({
+            id: Date.now(),
+            text: score > 0 ? `+${score} ${category}` : `${category} scratched`,
+            sub: nextName ? `${nextName}'s turn` : null,
+            tone: jackpot ? 'gold' : score > 0 ? 'good' : 'zero'
+          });
+          buzz(jackpot ? [30, 40, 30, 40, 60] : 20);
 
           const avail = Object.values(CATEGORY).filter(c => scores[currentPlayer][c] === undefined);
           let bestPotential = -1;
@@ -1386,9 +1523,51 @@
         const winner = gameMode === 1 ? 0 : (p1Stats.total >= p2Stats.total ? 0 : 1);
         const currentActiveStats = currentPlayer === 0 ? p1Stats : p2Stats;
 
-        const tacticalIQ = decisionStats.totalChoices > 0 
-          ? Math.round((decisionStats.optimalChoices / decisionStats.totalChoices) * 100) 
+        const tacticalIQ = decisionStats.totalChoices > 0
+          ? Math.round((decisionStats.optimalChoices / decisionStats.totalChoices) * 100)
           : 100;
+
+        // Clear the score toast after its animation.
+        useEffect(() => {
+          if (!toast) return;
+          const t = setTimeout(() => setToast(null), toast.tone === 'gold' ? 2600 : 1650);
+          return () => clearTimeout(t);
+        }, [toast]);
+
+        // Keyboard shortcuts: Space/R roll, 1-5 hold, Esc closes dialogs.
+        const keysRef = useRef(null);
+        keysRef.current = {
+          handleRoll, toggleHold, rollsLeft, isRolling, isGameOver,
+          cpuTurn: gameMode === 3 && currentPlayer === 1,
+          anyModal: !!(showLab || showScores || inspectCat),
+          closeModals: () => { setShowLab(false); setShowScores(false); setInspectCat(null); }
+        };
+        useEffect(() => {
+          const onKey = (e) => {
+            const k = keysRef.current;
+            if (!k || e.ctrlKey || e.metaKey || e.altKey) return;
+            const tag = (e.target && e.target.tagName) || '';
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+            if (e.key === 'Escape') {
+              if (k.anyModal) { e.preventDefault(); k.closeModals(); }
+              return;
+            }
+            if (k.anyModal || k.isGameOver || k.cpuTurn || e.repeat) return;
+            if (e.key === ' ' || e.key === 'r' || e.key === 'R') {
+              // Let Space activate a focused button normally.
+              if (e.key === ' ' && (tag === 'BUTTON' || tag === 'A')) return;
+              e.preventDefault();
+              if (k.rollsLeft > 0 && !k.isRolling) k.handleRoll();
+              return;
+            }
+            if (/^[1-5]$/.test(e.key)) {
+              e.preventDefault();
+              k.toggleHold(Number(e.key) - 1);
+            }
+          };
+          window.addEventListener('keydown', onKey);
+          return () => window.removeEventListener('keydown', onKey);
+        }, []);
 
         return (
           <div className="min-h-screen lg:h-screen flex flex-col max-w-7xl mx-auto px-2 sm:px-4 py-2 sm:py-3 lg:overflow-hidden">
@@ -1501,7 +1680,24 @@
               <div className="lg:col-span-7 flex flex-col gap-2.5 min-h-0 lg:overflow-y-auto pr-0.5">
                 
                 {/* Dice Bay Panel: Tight & Coupled */}
-                <div className="glass-panel glass-panel-glow rounded-xl p-3 sm:p-4 border-white/10 flex flex-col gap-3 flex-none">
+                <div className={`glass-panel glass-panel-glow relative rounded-xl p-3 sm:p-4 border-white/10 flex flex-col gap-3 flex-none ${toast && toast.tone === 'gold' ? 'animate-jackpot' : ''}`}>
+
+                  {toast && (
+                    <div key={toast.id} className="score-toast text-center" role="status" aria-live="polite">
+                      <div className={`px-4 py-1.5 rounded-xl font-['Orbitron'] font-black uppercase tracking-wider border shadow-2xl backdrop-blur-md ${
+                        toast.tone === 'gold'
+                          ? 'text-xl sm:text-2xl bg-amber-400/25 text-amber-200 border-amber-300/60'
+                          : toast.tone === 'good'
+                            ? 'text-sm sm:text-base bg-slate-950/85 text-cyan-300 border-cyan-400/50'
+                            : 'text-sm sm:text-base bg-slate-950/85 text-rose-300 border-rose-400/40'
+                      }`}>
+                        {toast.tone === 'gold' ? `Yatzy! ${toast.text}` : toast.text}
+                      </div>
+                      {toast.sub && (
+                        <div className="mt-1 text-[11px] font-mono text-slate-300 bg-slate-950/80 rounded px-2 py-0.5 inline-block">{toast.sub}</div>
+                      )}
+                    </div>
+                  )}
                   
                   {/* Energy Rolls & Quick Actions */}
                   <div className="flex items-center justify-between pb-2 border-b border-white/10">
@@ -1583,6 +1779,9 @@
                       <Icon.Refresh className={`w-4 h-4 ${isRolling ? 'animate-spin' : ''}`} />
                       {rollsLeft === 3 ? 'Roll Dice' : rollsLeft > 0 ? `Re-Roll (${rollsLeft} Left)` : 'Choose Category'}
                     </button>
+                    <p className="hidden sm:block mt-1.5 text-[10px] font-mono text-slate-500">
+                      <kbd>Space</kbd> roll · <kbd>1</kbd>-<kbd>5</kbd> hold · <kbd>Esc</kbd> close
+                    </p>
                   </div>
 
                   {/* Hold Strategy Advisor: Below Roll Button */}
